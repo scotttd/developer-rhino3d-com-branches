@@ -1,0 +1,209 @@
+#!/usr/bin/env ruby
+
+# underline=`tput smul`
+# nounderline=`tput rmul`
+# bold=`tput bold`
+# normal=`tput sgr0`
+
+# echo "You're on the ${underline}`git rev-parse --abbrev-ref HEAD`${nounderline} branch"
+
+# echo "Building the ${underline}`git rev-parse --abbrev-ref HEAD`${nounderline} branch!"
+
+require 'yaml'
+
+# define some handy string formatting
+class String
+  def black;          "\033[30m#{self}\033[0m" end
+  def red;            "\033[31m#{self}\033[0m" end
+  def green;          "\033[32m#{self}\033[0m" end
+  def yellow;          "\033[33m#{self}\033[0m" end
+  def magenta;        "\033[35m#{self}\033[0m" end
+  def cyan;           "\033[36m#{self}\033[0m" end
+  def grey;           "\033[37m#{self}\033[0m" end
+  def success;        "\u2713 ".encode('utf-8') + self end
+  def failure;        "\u2717 ".encode('utf-8') + self end
+  def wut;        "\u271D ".encode('utf-8') + self end
+
+  def bold;           "\e[1m#{self}\e[22m" end
+  def italic;         "\e[3m#{self}\e[23m" end
+  def underline;      "\e[4m#{self}\e[24m" end
+  def blink;          "\e[5m#{self}\e[25m" end
+  def reverse_color;  "\e[7m#{self}\e[27m" end
+end
+
+fetch = true
+deploy = true
+
+branch = `git rev-parse --abbrev-ref HEAD`.strip()
+
+puts "You're on the #{branch.underline} branch"
+
+# get branches that count as "versions" from _config.yml
+config = YAML.load_file('_config.yml')
+version_branches = config['version_branches']
+stable = branch == "master"
+
+puts "\nstable? #{stable}"
+puts "build?  #{stable or version_branches.include? branch}\n\n"
+
+# secondary config file
+config_dev = YAML.load_file('_config_dev.yml') || {}
+# puts config_dev.to_yaml
+config_dev['git_branch'] = branch
+config_dev['stable'] = stable
+baseurl = config_dev['baseurl_orig'] || config_dev['baseurl'] || ""
+config_dev['baseurl'] = baseurl.chomp("/") + "/" + branch
+config_dev['baseurl_orig'] = baseurl
+# puts config_dev.to_yaml
+File.open('_config_dev.yml', 'w') {|f| f.write config_dev.to_yaml }
+
+# exit
+
+# open('_config.yml', 'a') do |f|
+#   f.puts "git_branch: #{branch}"
+#   f.puts "stable: #{stable}"
+#   if version_branches.include? branch
+#     f.puts "baseurl: /#{branch}"
+#   end
+# end
+
+# exit
+
+user = {
+  name: "Bozo",
+  email: "brian+build@mcneel.com"
+}
+
+# puts "Building the #{branch.underline} branch!"
+
+if branch == "master"
+  # puts "hey #{branch.underline}, I'm going to build you!"
+
+  path = '_site'
+  puts "Building the #{branch.underline} branch in #{path.magenta}!"
+
+  # remove and re-make build directory
+  `rm -rf "#{path}"`
+  Dir.mkdir(path) unless File.exists?(path)
+
+  # build the site
+  puts `jekyll build --config _config.yml,_config_dev.yml`.cyan # _config_dev.yml contains custom baseurl
+
+  `rm #{path}/CNAME`
+  `touch #{path}/.nojekyll`
+
+  sha = `git rev-parse --short HEAD`
+
+  if fetch
+    # enter build directory...
+    Dir.chdir(path){
+      puts `pwd`.cyan
+
+      # intialise git repo
+      puts `git init`.cyan
+
+      # inside this git repo we'll pretend to be a new user
+      puts "Configuring user: #{user}"
+      `git config user.name "#{user[:name]}"`
+      `git config user.email "#{user[:email]}"`
+
+      # add remote git repo
+      `git remote add production https://github.com/mcneel/developer-rhino3d-com-branches.git`
+
+      # fetch and reset
+      puts `git fetch production`
+
+      if $?.exitstatus > 0
+        puts "Failed to contact github... :(".red
+        exit 5
+      end
+
+      `git reset production/gh-pages`
+
+      version_branches.each do |branch|
+        puts `git checkout -- #{branch}`
+      end
+
+      if deploy
+        puts `git add -A .`
+
+        puts `git status -s`
+        exit
+
+        puts `git commit -m "Deploy #{sha}"`
+
+        puts `git push production HEAD:gh-pages`
+      end
+    }
+  end
+
+elsif version_branches.include? branch
+  path = "_site"
+  branch_path = "#{path}/#{branch}"
+
+  puts "Building the #{branch.underline} branch in #{branch_path.cyan}!"
+
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+  # remove and re-make build directory
+  `rm -rf "#{path}"`
+  `mkdir -p #{path}/#{branch}`
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+  sha = `git rev-parse --short HEAD`
+
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+  # build the site
+  puts `jekyll build -d #{path}/#{branch} --config _config.yml,_config_dev.yml` # _config_dev.yml contains custom baseurl
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+  # `rm #{path}/CNAME`
+  # `touch #{path}/.nojekyll`
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+  if fetch
+    # enter build directory...
+    Dir.chdir(path){
+      puts `pwd`
+
+      # intialise git repo
+      puts `git init`
+
+      # inside this git repo we'll pretend to be a new user
+      puts "Configuring user: #{user}"
+      `git config user.name "#{user[:name]}"`
+      `git config user.email "#{user[:email]}"`
+
+      # add remote git repo
+      puts `git remote add production https://github.com/mcneel/developer-rhino3d-com-branches.git`
+
+      # fetch and reset
+      puts `git fetch production`
+
+      if $?.exitstatus > 0
+        puts "Failed to contact github... :("
+        exit 5
+      end
+
+      `git reset production/gh-pages`
+
+      # puts `git status`
+      if deploy
+        puts `git add -A #{branch}`
+
+        puts `git status -s #{branch}`
+
+        puts `git commit -m "Deploy #{sha} (#{branch})"`
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+        # push to github
+        puts `git push production HEAD:gh-pages`
+      end
+    }
+  else
+    puts "Skipping fetch".yellow
+  end
+else
+  puts "nope"
+
+end

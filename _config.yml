@@ -27,7 +27,7 @@ kramdown:
   input: GFM
 gems:
   - jekyll-sitemap
-  
+
 #port: 4444
 
 safe: true
@@ -52,4 +52,7 @@ collections:
     output: true
     permalink: /samples/:path/
 
-exclude: [/script]
+exclude: [/script, /test]
+
+version_branches:
+  - wip
