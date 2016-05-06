@@ -131,7 +131,7 @@ puts "Configuring user: #{user}"
 `git remote add production #{remote}`
 
 # fetch and reset
-puts `git fetch production`
+puts `git fetch --depth=1 production`
 
 if $?.exitstatus > 0
   puts "Failed to contact github... :(".red
@@ -162,4 +162,4 @@ else
 end
 
 # deploy (via ssh using bozo's deploy key)
-puts `ssh-agent $(ssh-add ../script/.ssh/bozo; git push production HEAD:gh-pages)`
+puts `git push production HEAD:gh-pages`
