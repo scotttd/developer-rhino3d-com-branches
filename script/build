@@ -69,6 +69,7 @@ path = base_path = "_site"
 # get sha and check if working dir is dirty (shouldn't be the case if using CI)
 sha = `git rev-parse --verify --short HEAD`.rstrip
 dirty = `git status --porcelain` != ""
+puts `git status --porcelain`
 
 # set path
 if version_branches.include? branch
