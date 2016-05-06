@@ -27,7 +27,7 @@ end
 # # # # # # #
 
 # what's your name, branch?
-branch = `git rev-parse --abbrev-ref HEAD`.strip()
+branch = ENV['TRAVIS_BRANCH'] || `git rev-parse --abbrev-ref HEAD`.strip()
 
 puts "You're on the #{branch.underline} branch"
 
