@@ -47,6 +47,11 @@ if not (is_stable or is_version)
   exit 120
 end
 
+# get sha and check if working dir is dirty (shouldn't be the case if using CI)
+sha = `git rev-parse --verify --short HEAD`.rstrip
+dirty = `git status --porcelain` != ""
+puts `git status --porcelain`
+
 # load secondary (dev) config file, if possible
 config_dev = YAML.load_file('_config_dev.yml') || {}
 
@@ -65,11 +70,6 @@ path = base_path = "_site"
 
 # remove root build directory before we begin
 `rm -rf "#{base_path}"`
-
-# get sha and check if working dir is dirty (shouldn't be the case if using CI)
-sha = `git rev-parse --verify --short HEAD`.rstrip
-dirty = `git status --porcelain` != ""
-puts `git status --porcelain`
 
 # set path
 if version_branches.include? branch
