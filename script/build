@@ -1,14 +1,5 @@
 #!/usr/bin/env ruby
 
-# underline=`tput smul`
-# nounderline=`tput rmul`
-# bold=`tput bold`
-# normal=`tput sgr0`
-
-# echo "You're on the ${underline}`git rev-parse --abbrev-ref HEAD`${nounderline} branch"
-
-# echo "Building the ${underline}`git rev-parse --abbrev-ref HEAD`${nounderline} branch!"
-
 require 'yaml'
 
 # define some handy string formatting
@@ -31,9 +22,11 @@ class String
   def reverse_color;  "\e[7m#{self}\e[27m" end
 end
 
-fetch = true
-deploy = true
+# # # # # # #
+# CONFIGURE #
+# # # # # # #
 
+# what's your name, branch?
 branch = `git rev-parse --abbrev-ref HEAD`.strip()
 
 puts "You're on the #{branch.underline} branch"
@@ -41,169 +34,132 @@ puts "You're on the #{branch.underline} branch"
 # get branches that count as "versions" from _config.yml
 config = YAML.load_file('_config.yml')
 version_branches = config['version_branches']
-stable = branch == "master"
 
-puts "\nstable? #{stable}"
-puts "build?  #{stable or version_branches.include? branch}\n\n"
+# is this the stable branch? Should I build it?
+is_stable = branch == "master"
+# puts "\nstable? #{is_stable}"
+is_version = version_branches.include? branch
+# puts "build?  #{is_stable or is_version}\n\n"
 
-# secondary config file
+# abort if we're not on a recognised branch
+if not (is_stable or is_version)
+  puts "Uh oh, #{branch.underline} is not a recognised branch!".red
+  exit 120
+end
+
+# load secondary (dev) config file, if possible
 config_dev = YAML.load_file('_config_dev.yml') || {}
-# puts config_dev.to_yaml
+
+# add some extra keys to secondary config
 config_dev['git_branch'] = branch
-config_dev['stable'] = stable
+config_dev['stable'] = is_stable
 baseurl = config_dev['baseurl_orig'] || config_dev['baseurl'] || ""
-config_dev['baseurl'] = baseurl.chomp("/") + "/" + branch
+config_dev['baseurl'] = baseurl.chomp "/"
+if not is_stable then config_dev['baseurl'] += "/#{branch}" end
 config_dev['baseurl_orig'] = baseurl
-# puts config_dev.to_yaml
 File.open('_config_dev.yml', 'w') {|f| f.write config_dev.to_yaml }
 
-# exit
+# build directory: "path" is the branch build dir, whereas "base_path" is the
+# root build dir (if branch == master then path == base_path)
+path = base_path = "_site"
 
-# open('_config.yml', 'a') do |f|
-#   f.puts "git_branch: #{branch}"
-#   f.puts "stable: #{stable}"
-#   if version_branches.include? branch
-#     f.puts "baseurl: /#{branch}"
-#   end
-# end
+# remove root build directory before we begin
+`rm -rf "#{base_path}"`
 
-# exit
+# get sha and check if working dir is dirty (shouldn't be the case if using CI)
+sha = `git rev-parse --verify --short HEAD`.rstrip
+dirty = `git status --porcelain` != ""
 
-user = {
-  name: "Bozo",
-  email: "brian+build@mcneel.com"
-}
+# set path
+if version_branches.include? branch
+  path += "/#{branch}"
+end
 
-# puts "Building the #{branch.underline} branch!"
+# # # # #
+# BUILD #
+# # # # #
 
+puts "WARNING: Dirty working directory!".red if dirty
+
+puts "Building #{sha}#{"+" if dirty} (#{branch.underline}) in #{path.magenta}!"
+
+# ensure the branch build directory exists
+`mkdir -p #{path}`
+
+# build the site
+puts `jekyll build -d #{path} --config _config.yml,_config_dev.yml`.cyan # _config_dev.yml contains custom baseurl
+
+# tidy up (TODO: should be able to remove this)
 if branch == "master"
-  # puts "hey #{branch.underline}, I'm going to build you!"
-
-  path = '_site'
-  puts "Building the #{branch.underline} branch in #{path.magenta}!"
-
-  # remove and re-make build directory
-  `rm -rf "#{path}"`
-  Dir.mkdir(path) unless File.exists?(path)
-
-  # build the site
-  puts `jekyll build --config _config.yml,_config_dev.yml`.cyan # _config_dev.yml contains custom baseurl
-
   `rm #{path}/CNAME`
   `touch #{path}/.nojekyll`
-
-  sha = `git rev-parse --short HEAD`
-
-  if fetch
-    # enter build directory...
-    Dir.chdir(path){
-      puts `pwd`.cyan
-
-      # intialise git repo
-      puts `git init`.cyan
-
-      # inside this git repo we'll pretend to be a new user
-      puts "Configuring user: #{user}"
-      `git config user.name "#{user[:name]}"`
-      `git config user.email "#{user[:email]}"`
-
-      # add remote git repo
-      `git remote add production https://github.com/mcneel/developer-rhino3d-com-branches.git`
-
-      # fetch and reset
-      puts `git fetch production`
-
-      if $?.exitstatus > 0
-        puts "Failed to contact github... :(".red
-        exit 5
-      end
-
-      `git reset production/gh-pages`
-
-      version_branches.each do |branch|
-        puts `git checkout -- #{branch}`
-      end
-
-      if deploy
-        puts `git add -A .`
-
-        puts `git status -s`
-        exit
-
-        puts `git commit -m "Deploy #{sha}"`
-
-        puts `git push production HEAD:gh-pages`
-      end
-    }
-  end
-
-elsif version_branches.include? branch
-  path = "_site"
-  branch_path = "#{path}/#{branch}"
-
-  puts "Building the #{branch.underline} branch in #{branch_path.cyan}!"
-
-  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-  # remove and re-make build directory
-  `rm -rf "#{path}"`
-  `mkdir -p #{path}/#{branch}`
-  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-  sha = `git rev-parse --short HEAD`
-
-  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-  # build the site
-  puts `jekyll build -d #{path}/#{branch} --config _config.yml,_config_dev.yml` # _config_dev.yml contains custom baseurl
-  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-  # `rm #{path}/CNAME`
-  # `touch #{path}/.nojekyll`
-  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-  if fetch
-    # enter build directory...
-    Dir.chdir(path){
-      puts `pwd`
-
-      # intialise git repo
-      puts `git init`
-
-      # inside this git repo we'll pretend to be a new user
-      puts "Configuring user: #{user}"
-      `git config user.name "#{user[:name]}"`
-      `git config user.email "#{user[:email]}"`
-
-      # add remote git repo
-      puts `git remote add production https://github.com/mcneel/developer-rhino3d-com-branches.git`
-
-      # fetch and reset
-      puts `git fetch production`
-
-      if $?.exitstatus > 0
-        puts "Failed to contact github... :("
-        exit 5
-      end
-
-      `git reset production/gh-pages`
-
-      # puts `git status`
-      if deploy
-        puts `git add -A #{branch}`
-
-        puts `git status -s #{branch}`
-
-        puts `git commit -m "Deploy #{sha} (#{branch})"`
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-        # push to github
-        puts `git push production HEAD:gh-pages`
-      end
-    }
-  else
-    puts "Skipping fetch".yellow
-  end
-else
-  puts "nope"
-
 end
+
+# # # # # #
+# DEPLOY! #
+# # # # # #
+
+# enter build directory...
+puts "Entering root build dir: #{base_path.magenta}"
+Dir.chdir(base_path)
+
+# check if the builder is CI
+if ENV['CI'] != "true"
+  puts "You're not a robot! (Expected $CI == true, got #{ENV['CI']}.)".red.underline
+  exit 128
+end
+
+remote = `git config remote.origin.url`
+remote.sub! "https://github.com/", "git@github.com:"
+puts "Deploying to #{remote.yellow}"
+
+# intialise git repo
+puts `git init`.cyan
+
+# setup the git user
+user = {
+  name: ENV['GITHUB_USER_NAME'] || "Bozo",
+  email: ENV['GITHUB_USER_EMAIL'] || "brian+build@mcneel.com"
+}
+
+# inside this git repo we'll pretend to be a new user
+puts "Configuring user: #{user}"
+`git config user.name "#{user[:name]}"`
+`git config user.email "#{user[:email]}"`
+
+# add remote git repo
+`git remote add production #{remote}`
+
+# fetch and reset
+puts `git fetch production`
+
+if $?.exitstatus > 0
+  puts "Failed to contact github... :(".red
+  exit 5
+end
+
+`git reset production/gh-pages`
+
+if branch == "master"
+  # revert version branch directories so they don't get staged
+  version_branches.each do |branch|
+    puts `git checkout -- #{branch}`
+  end
+
+  # stage and commit
+  puts `git add -A .`
+
+  puts `git status -s` # debug
+
+  puts `git commit -m "Deploy #{sha}#{"+" if dirty}"`
+else
+  # stage and commit
+  puts `git add -A #{branch}`
+
+  puts `git status -s #{branch}` # debug
+
+  puts `git commit -m "Deploy #{sha}#{"+" if dirty} (#{branch})"`
+end
+
+# deploy (via ssh using bozo's deploy key)
+puts `ssh-agent $(ssh-add ../script/.ssh/bozo; git push production HEAD:gh-pages)`
