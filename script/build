@@ -90,6 +90,11 @@ puts "Building #{sha}#{"+" if dirty} (#{branch.underline}) in #{path.magenta}!"
 # build the site
 puts `jekyll build -d #{path} --config _config.yml,_config_dev.yml`.cyan # _config_dev.yml contains custom baseurl
 
+if $?.exitstatus > 0
+  puts "Error building site... :(".red
+  exit 3
+end
+
 # tidy up (TODO: should be able to remove this)
 if branch == "master"
   `rm #{path}/CNAME`
