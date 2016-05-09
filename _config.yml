@@ -52,7 +52,7 @@ collections:
     output: true
     permalink: /samples/:path/
 
-exclude: [/script, /test]
+exclude: [/script, /test, README.md, CONTRIBUTING.md, Gemfile]
 
 version_branches:
   - wip
