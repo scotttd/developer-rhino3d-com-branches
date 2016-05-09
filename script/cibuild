@@ -44,7 +44,13 @@ is_version = version_branches.include? branch
 # abort if we're not on a recognised branch
 if not (is_stable or is_version)
   puts "Uh oh, #{branch.underline} is not a recognised branch!".red
-  exit 120
+  if ENV['CI'] == "true"
+    puts "Checking for errors in the site (but not deploying)..."
+    puts `jekyll build`.cyan
+    exit $?.exitstatus
+  else
+    exit 120
+  end
 end
 
 # get sha and check if working dir is dirty (shouldn't be the case if using CI)
