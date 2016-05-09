@@ -57,7 +57,6 @@ config_dev = YAML.load_file('_config_dev.yml') || {}
 
 # add some extra keys to secondary config
 config_dev['git_branch'] = branch
-config_dev['stable'] = is_stable
 baseurl = config_dev['baseurl_orig'] || config_dev['baseurl'] || ""
 config_dev['baseurl'] = baseurl.chomp "/"
 if not is_stable then config_dev['baseurl'] += "/#{branch}" end

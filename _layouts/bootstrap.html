@@ -10,10 +10,11 @@
     {% include googletagmanager.html %}
 
     <div class="container">
+      {% include version-banner.html %}
+
       {% include header.html %}
 
       <div class="page-content">
-        {% include stable.html %}
         <!--div class="wrapper"-->
           {{ content }}
         <!--/div-->
@@ -34,7 +35,7 @@
     <script type="text/javascript">
     $('body').scrollspy({
         target: '.bs-docs-sidebar',
-        offset: 110
+        offset: 150 /* fixed header is about 40px high */
     });
     </script>
   </body>
